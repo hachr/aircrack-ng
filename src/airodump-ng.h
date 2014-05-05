@@ -430,6 +430,7 @@ struct globals
     int output_format_csv;
     int output_format_kismet_csv;
     int output_format_kismet_netxml;
+    int probe;
     pthread_t input_tid;
     int sort_by;
     int sort_inv;

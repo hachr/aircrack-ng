@@ -79,7 +79,6 @@
 
 void dump_sort( void );
 void dump_print( int ws_row, int ws_col, int if_num );
-void dump_print_probe_only( int ws_row, int ws_col, int if_num );
 
 char * get_manufacturer_from_string(char * buffer) {
 	char * manuf = NULL;
@@ -2928,240 +2927,9 @@ static char *parse_timestamp(unsigned long long timestamp) {
 
 	return s;
 }
-void dump_print_probe_only( int ws_row, int ws_col, int if_num )
-{
 
-
-    time_t tt;
-    struct tm *lt;
-    int nlines, i, n, len;
-    char strbuf[512];
-    char buffer[512];
-    char ssid_list[512];
-    struct AP_info *ap_cur;
-    struct ST_info *st_cur;
-    struct NA_info *na_cur;
-    int columns_ap = 83;
-    int columns_sta = 74;
-    int columns_na = 68;
-
-    int num_ap;
-    int num_sta;
-
-    if( nlines >= ws_row )
-        return;
-
-    if(G.do_sort_always) {
-	pthread_mutex_lock( &(G.mx_sort) );
-	    dump_sort();
-	pthread_mutex_unlock( &(G.mx_sort) );
-    }
-
-    tt = time( NULL );
-    lt = localtime( &tt );
-
-
-    if(G.show_sta) {
-	memcpy( strbuf, " BSSID              STATION "
-		"           PWR   Rate    Lost    Frames  Probes", columns_sta );
-	strbuf[ws_col - 1] = '\0';
-	fprintf( stderr, "%s\n", strbuf );
-
-	memset( strbuf, ' ', ws_col - 1 );
-	strbuf[ws_col - 1] = '\0';
-	fprintf( stderr, "%s\n", strbuf );
-
-	ap_cur = G.ap_end;
-
-	num_sta = 0;
-
-	while( ap_cur != NULL )
-	{
-	    if( ap_cur->nb_pkt < 2 ||
-		time( NULL ) - ap_cur->tlast > G.berlin )
-	    {
-		ap_cur = ap_cur->prev;
-		continue;
-	    }
-
-	    if(ap_cur->security != 0 && G.f_encrypt != 0 && ((ap_cur->security & G.f_encrypt) == 0))
-	    {
-		ap_cur = ap_cur->prev;
-		continue;
-	    }
-
-	    // Don't filter unassociated clients by ESSID
-	    if(memcmp(ap_cur->bssid, BROADCAST, 6) && is_filtered_essid(ap_cur->essid))
-	    {
-		ap_cur = ap_cur->prev;
-		continue;
-	    }
-
-	    if( nlines >= (ws_row-1) )
-		return;
-
-	    st_cur = G.st_end;
-
-	    if(G.selection_ap && (memcmp(G.selected_bssid, ap_cur->bssid, 6)==0)) {
-		textstyle(TEXT_REVERSE);
-	    }
-
-	    if(ap_cur->marked) {
-		textcolor_fg(ap_cur->marked_color);
-	    }
-
-	    while( st_cur != NULL )
-	    {
-		if( st_cur->base != ap_cur ||
-		    time( NULL ) - st_cur->tlast > G.berlin )
-		{
-		    st_cur = st_cur->prev;
-		    continue;
-		}
-
-		if( ! memcmp( ap_cur->bssid, BROADCAST, 6 ) && G.asso_client )
-		{
-		    st_cur = st_cur->prev;
-		    continue;
-		}
-
-		num_sta++;
-
-		if(G.start_print_sta > num_sta)
-		    continue;
-
-		nlines++;
-
-		if( ws_row != 0 && nlines >= ws_row )
-		    return;
-
-		if( ! memcmp( ap_cur->bssid, BROADCAST, 6 ) )
-		    fprintf( stderr, " (not associated) " );
-		else
-		    fprintf( stderr, " %02X:%02X:%02X:%02X:%02X:%02X",
-			    ap_cur->bssid[0], ap_cur->bssid[1],
-			    ap_cur->bssid[2], ap_cur->bssid[3],
-			    ap_cur->bssid[4], ap_cur->bssid[5] );
-
-		fprintf( stderr, "  %02X:%02X:%02X:%02X:%02X:%02X",
-			st_cur->stmac[0], st_cur->stmac[1],
-			st_cur->stmac[2], st_cur->stmac[3],
-			st_cur->stmac[4], st_cur->stmac[5] );
-
-		fprintf( stderr, "  %3d ", st_cur->power    );
-		fprintf( stderr, "  %2d", st_cur->rate_to/1000000  );
-		fprintf( stderr,  "%c", (st_cur->qos_fr_ds) ? 'e' : ' ');
-		fprintf( stderr,  "-%2d", st_cur->rate_from/1000000);
-		fprintf( stderr,  "%c", (st_cur->qos_to_ds) ? 'e' : ' ');
-		fprintf( stderr, "  %4d", st_cur->missed   );
-		fprintf( stderr, " %8ld", st_cur->nb_pkt   );
-
-		    memset( ssid_list, 0, sizeof( ssid_list ) );
-
-		    for( i = 0, n = 0; i < NB_PRB; i++ )
-		    {
-			if( st_cur->probes[i][0] == '\0' )
-			    continue;
-
-			snprintf( ssid_list + n, sizeof( ssid_list ) - n - 1,
-				"%c%s", ( i > 0 ) ? ',' : ' ',
-				st_cur->probes[i] );
-
-			n += ( 1 + strlen( st_cur->probes[i] ) );
-
-			if( n >= (int) sizeof( ssid_list ) )
-			    break;
-		    }
-
-		    memset( strbuf, 0, sizeof( strbuf ) );
-		    snprintf( strbuf,  sizeof( strbuf ) - 1,
-			    "%-256s", ssid_list );
-		    strbuf[ws_col - (columns_sta - 6)] = '\0';
-		    fprintf( stderr, " %s", strbuf );
-
-		fprintf( stderr, "\n" );
-
-		st_cur = st_cur->prev;
-	    }
-
-	    if( (G.selection_ap && (memcmp(G.selected_bssid, ap_cur->bssid, 6)==0)) || (ap_cur->marked) ) {
-		textstyle(TEXT_RESET);
-	    }
-		fflush( stderr );
-	    ap_cur = ap_cur->prev;
-	}
-    }
-
-    if(G.show_ack)
-    {
-	return;
-        /* print some informations about each unknown station */
-
-        nlines += 3;
-
-        if( nlines >= (ws_row-1) )
-            return;
-
-        memset( strbuf, ' ', ws_col - 1 );
-        strbuf[ws_col - 1] = '\0';
-        fprintf( stderr, "%s\n", strbuf );
-
-        memcpy( strbuf, " MAC       "
-                "          CH PWR    ACK ACK/s    CTS RTS_RX RTS_TX  OTHER", columns_na );
-        strbuf[ws_col - 1] = '\0';
-        fprintf( stderr, "%s\n", strbuf );
-
-        memset( strbuf, ' ', ws_col - 1 );
-        strbuf[ws_col - 1] = '\0';
-        fprintf( stderr, "%s\n", strbuf );
-
-        na_cur = G.na_1st;
-
-        while( na_cur != NULL )
-        {
-            if( time( NULL ) - na_cur->tlast > 120 )
-            {
-                na_cur = na_cur->next;
-                continue;
-            }
-
-            if( nlines >= (ws_row-1) )
-                return;
-
-            nlines++;
-
-            if( ws_row != 0 && nlines >= ws_row )
-                return;
-
-            fprintf( stderr, " %02X:%02X:%02X:%02X:%02X:%02X",
-                    na_cur->namac[0], na_cur->namac[1],
-                    na_cur->namac[2], na_cur->namac[3],
-                    na_cur->namac[4], na_cur->namac[5] );
-
-            fprintf( stderr, "  %3d", na_cur->channel  );
-            fprintf( stderr, " %3d", na_cur->power  );
-            fprintf( stderr, " %6d", na_cur->ack );
-            fprintf( stderr, "  %4d", na_cur->ackps );
-            fprintf( stderr, " %6d", na_cur->cts );
-            fprintf( stderr, " %6d", na_cur->rts_r );
-            fprintf( stderr, " %6d", na_cur->rts_t );
-            fprintf( stderr, " %6d", na_cur->other );
-
-            fprintf( stderr, "\n" );
-
-            na_cur = na_cur->next;
-        }
-    }
-    fprintf (stderr, "\r\n");
-}
 void dump_print( int ws_row, int ws_col, int if_num )
 {
-
-    if(G.probe){
-        dump_print_probe_only(ws_row,ws_col,if_num);
-        return;
-    }
-
     time_t tt;
     struct tm *lt;
     int nlines, i, n, len;
@@ -6134,7 +5902,9 @@ int main( int argc, char *argv[] )
 
             case 'p':
             
-                G.probe = 1;
+		G.show_ap = 0;
+		G.show_sta = 1;
+		G.show_ack = 0;
                 break;
 
             case 'w':

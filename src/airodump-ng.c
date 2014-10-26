@@ -5647,7 +5647,6 @@ int main( int argc, char *argv[] )
     G.output_format_csv = 1;
     G.output_format_kismet_csv = 1;
     G.output_format_kismet_netxml = 1;
-    G.probe = 0;
 
 
 #ifdef HAVE_PCRE
